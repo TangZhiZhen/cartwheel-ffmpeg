@@ -1,0 +1,31 @@
+From 3bbe0c210b05fc6fbd7b1d4bbd8479db7f2cf957 Mon Sep 17 00:00:00 2001
+From: Xu Guangxin <guangxin.xu@intel.com>
+Date: Wed, 6 Jan 2021 11:12:34 +0800
+Subject: [PATCH] avcodec/qsv_enc: do not reuse enc_ctrl from previous frames
+
+fixes #8857
+
+If we do not clear the enc_ctrl, we will reuse previous frames' data like FrameType.
+
+Reviewed-by: Xiang, Haihao <haihao.xiang@intel.com>
+Signed-off-by: James Almer <jamrial@gmail.com>
+---
+ libavcodec/qsvenc.c | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/libavcodec/qsvenc.c b/libavcodec/qsvenc.c
+index 50ec706..090fdbe 100644
+--- a/libavcodec/qsvenc.c
++++ b/libavcodec/qsvenc.c
+@@ -1271,6 +1271,8 @@ static void clear_unused_frames(QSVEncContext *q)
+     while (cur) {
+         if (cur->used && !cur->surface.Data.Locked) {
+             free_encoder_ctrl_payloads(&cur->enc_ctrl);
++            //do not reuse enc_ctrl from previous frame
++            memset(&cur->enc_ctrl, 0, sizeof(cur->enc_ctrl));
+             if (cur->frame->format == AV_PIX_FMT_QSV) {
+                 av_frame_unref(cur->frame);
+             }
+-- 
+1.8.3.1
+

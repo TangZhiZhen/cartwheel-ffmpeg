@@ -1,0 +1,56 @@
+From f115a2b7635d9e47b1299661ddaa6ac2386e9db1 Mon Sep 17 00:00:00 2001
+From: Zhong Li <zhong.li@intel.com>
+Date: Tue, 13 Aug 2019 14:11:07 +0800
+Subject: [PATCH] lavc/qsvdec: add function ff_qsv_map_picstruct()
+
+Signed-off-by: Zhong Li <zhong.li@intel.com>
+---
+ libavcodec/qsv.c          | 18 ++++++++++++++++++
+ libavcodec/qsv_internal.h |  2 ++
+ 2 files changed, 20 insertions(+)
+
+diff --git a/libavcodec/qsv.c b/libavcodec/qsv.c
+index 986d4f6..437ef7c 100644
+--- a/libavcodec/qsv.c
++++ b/libavcodec/qsv.c
+@@ -245,6 +245,24 @@ int ff_qsv_find_surface_idx(QSVFramesContext *ctx, QSVFrame *frame)
+     return AVERROR_BUG;
+ }
+ 
++enum AVFieldOrder ff_qsv_map_picstruct(int mfx_pic_struct)
++{
++    enum AVFieldOrder field = AV_FIELD_UNKNOWN;
++    switch (mfx_pic_struct & 0xF) {
++    case MFX_PICSTRUCT_PROGRESSIVE:
++        field = AV_FIELD_PROGRESSIVE;
++        break;
++    case MFX_PICSTRUCT_FIELD_TFF:
++        field = AV_FIELD_TT;
++        break;
++    case MFX_PICSTRUCT_FIELD_BFF:
++        field = AV_FIELD_BB;
++        break;
++    }
++
++    return field;
++}
++
+ enum AVPictureType ff_qsv_map_pictype(int mfx_pic_type)
+ {
+     enum AVPictureType type;
+diff --git a/libavcodec/qsv_internal.h b/libavcodec/qsv_internal.h
+index b63a7d6..f701cee 100644
+--- a/libavcodec/qsv_internal.h
++++ b/libavcodec/qsv_internal.h
+@@ -95,6 +95,8 @@ int ff_qsv_level_to_mfx(enum AVCodecID codec_id, int level);
+ int ff_qsv_map_pixfmt(enum AVPixelFormat format, uint32_t *fourcc);
+ enum AVPictureType ff_qsv_map_pictype(int mfx_pic_type);
+ 
++enum AVFieldOrder ff_qsv_map_picstruct(int mfx_pic_struct);
++
+ int ff_qsv_init_internal_session(AVCodecContext *avctx, mfxSession *session,
+                                  const char *load_plugins);
+ 
+-- 
+1.8.3.1
+

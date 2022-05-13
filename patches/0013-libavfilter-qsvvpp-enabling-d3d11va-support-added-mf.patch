@@ -1,0 +1,36 @@
+From a611c35001f477f1c911027faa93cddf67874693 Mon Sep 17 00:00:00 2001
+From: Artem Galin <artem.galin@intel.com>
+Date: Fri, 20 Aug 2021 22:48:06 +0100
+Subject: [PATCH] libavfilter/qsvvpp: enabling d3d11va support, added
+ mfxhdlpair
+
+Adding DX11 relevant device type checks and adjusting callback with
+proper MediaSDK pair type support.
+
+Signed-off-by: Artem Galin <artem.galin@intel.com>
+---
+ libavfilter/qsvvpp.c | 8 +++++++-
+ 1 file changed, 7 insertions(+), 1 deletions(-)
+
+diff --git a/libavfilter/qsvvpp.c b/libavfilter/qsvvpp.c
+index c7ef8a9..66b8673 100644
+--- a/libavfilter/qsvvpp.c
++++ b/libavfilter/qsvvpp.c
+@@ -202,7 +197,13 @@ static mfxStatus frame_unlock(mfxHDL pthis, mfxMemId mid, mfxFrameData *ptr)
+ 
+ static mfxStatus frame_get_hdl(mfxHDL pthis, mfxMemId mid, mfxHDL *hdl)
+ {
+-    *hdl = mid;
++    mfxHDLPair *pair_dst = (mfxHDLPair*)hdl;
++    mfxHDLPair *pair_src = (mfxHDLPair*)mid;
++
++    pair_dst->first = pair_src->first;
++
++    if (pair_src->second != (mfxMemId)MFX_INFINITE)
++        pair_dst->second = pair_src->second;
+     return MFX_ERR_NONE;
+ }
+ 
+-- 
+1.8.3.1
+

@@ -1,0 +1,135 @@
+From 0dfcfc5096d76e30a4ef688fc5b2402cf81f3190 Mon Sep 17 00:00:00 2001
+From: Zhong Li <zhong.li@intel.com>
+Date: Tue, 13 Aug 2019 14:11:10 +0800
+Subject: [PATCH] lavc/qsvdec: remove orignal parser code since not
+ needed now
+
+Signed-off-by: Zhong Li <zhong.li@intel.com>
+---
+ configure           | 10 +++++-----
+ libavcodec/qsvdec.c | 28 +---------------------------
+ libavcodec/qsvdec.h |  3 ---
+ 3 files changed, 6 insertions(+), 35 deletions(-)
+
+diff --git a/configure b/configure
+index c09c842..5bd0249 100755
+--- a/configure
++++ b/configure
+@@ -3018,7 +3018,7 @@ h264_mediacodec_decoder_select="h264_mp4toannexb_bsf h264_parser"
+ h264_mmal_decoder_deps="mmal"
+ h264_nvenc_encoder_deps="nvenc"
+ h264_omx_encoder_deps="omx"
+-h264_qsv_decoder_select="h264_mp4toannexb_bsf h264_parser qsvdec"
++h264_qsv_decoder_select="h264_mp4toannexb_bsf qsvdec"
+ h264_qsv_encoder_select="qsvenc"
+ h264_rkmpp_decoder_deps="rkmpp"
+ h264_rkmpp_decoder_select="h264_mp4toannexb_bsf"
+@@ -3032,7 +3032,7 @@ hevc_cuvid_decoder_select="hevc_mp4toannexb_bsf"
+ hevc_mediacodec_decoder_deps="mediacodec"
+ hevc_mediacodec_decoder_select="hevc_mp4toannexb_bsf hevc_parser"
+ hevc_nvenc_encoder_deps="nvenc"
+-hevc_qsv_decoder_select="hevc_mp4toannexb_bsf hevc_parser qsvdec"
++hevc_qsv_decoder_select="hevc_mp4toannexb_bsf qsvdec"
+ hevc_qsv_encoder_select="hevcparse qsvenc"
+ hevc_rkmpp_decoder_deps="rkmpp"
+ hevc_rkmpp_decoder_select="hevc_mp4toannexb_bsf"
+@@ -3052,7 +3052,7 @@ mpeg2_crystalhd_decoder_select="crystalhd"
+ mpeg2_cuvid_decoder_deps="cuvid"
+ mpeg2_mmal_decoder_deps="mmal"
+ mpeg2_mediacodec_decoder_deps="mediacodec"
+-mpeg2_qsv_decoder_select="qsvdec mpegvideo_parser"
++mpeg2_qsv_decoder_select="qsvdec"
+ mpeg2_qsv_encoder_select="qsvenc"
+ mpeg2_vaapi_encoder_select="cbs_mpeg2 vaapi_encode"
+ mpeg2_v4l2m2m_decoder_deps="v4l2_m2m mpeg2_v4l2_m2m"
+@@ -3069,11 +3069,11 @@ nvenc_hevc_encoder_select="hevc_nvenc_encoder"
+ vc1_crystalhd_decoder_select="crystalhd"
+ vc1_cuvid_decoder_deps="cuvid"
+ vc1_mmal_decoder_deps="mmal"
+-vc1_qsv_decoder_select="qsvdec vc1_parser"
++vc1_qsv_decoder_select="qsvdec"
+ vc1_v4l2m2m_decoder_deps="v4l2_m2m vc1_v4l2_m2m"
+ vp8_cuvid_decoder_deps="cuvid"
+ vp8_mediacodec_decoder_deps="mediacodec"
+-vp8_qsv_decoder_select="qsvdec vp8_parser"
++vp8_qsv_decoder_select="qsvdec"
+ vp8_rkmpp_decoder_deps="rkmpp"
+ vp8_vaapi_encoder_deps="VAEncPictureParameterBufferVP8"
+ vp8_vaapi_encoder_select="vaapi_encode"
+diff --git a/libavcodec/qsvdec.c b/libavcodec/qsvdec.c
+index 7e48c83..eef4fe7 100644
+--- a/libavcodec/qsvdec.c
++++ b/libavcodec/qsvdec.c
+@@ -529,9 +529,6 @@ int ff_qsv_decode_close(QSVContext *q)
+     av_fifo_free(q->async_fifo);
+     q->async_fifo = NULL;
+ 
+-    av_parser_close(q->parser);
+-    avcodec_free_context(&q->avctx_internal);
+-
+     if (q->internal_session)
+         MFXClose(q->internal_session);
+ 
+@@ -544,36 +541,13 @@ int ff_qsv_decode_close(QSVContext *q)
+ int ff_qsv_process_data(AVCodecContext *avctx, QSVContext *q,
+                         AVFrame *frame, int *got_frame, AVPacket *pkt)
+ {
+-    uint8_t *dummy_data;
+-    int dummy_size;
+     int ret;
+     mfxVideoParam param = { 0 };
+     enum AVPixelFormat pix_fmt = AV_PIX_FMT_NV12;
+ 
+-    if (!q->avctx_internal) {
+-        q->avctx_internal = avcodec_alloc_context3(NULL);
+-        if (!q->avctx_internal)
+-            return AVERROR(ENOMEM);
+-
+-        q->avctx_internal->codec_id = avctx->codec_id;
+-
+-        q->parser = av_parser_init(avctx->codec_id);
+-        if (!q->parser)
+-            return AVERROR(ENOMEM);
+-
+-        q->parser->flags |= PARSER_FLAG_COMPLETE_FRAMES;
+-    }
+-
+     if (!pkt->size)
+         return qsv_decode(avctx, q, frame, got_frame, pkt);
+ 
+-    /* we assume the packets are already split properly and want
+-     * just the codec parameters here */
+-    av_parser_parse2(q->parser, q->avctx_internal,
+-                     &dummy_data, &dummy_size,
+-                     pkt->data, pkt->size, pkt->pts, pkt->dts,
+-                     pkt->pos);
+-
+     /* TODO: flush delayed frames on reinit */
+ 
+     // sw_pix_fmt, coded_width/height should be set for ff_get_format(),
+@@ -622,7 +596,7 @@ int ff_qsv_process_data(AVCodecContext *avctx, QSVContext *q,
+     return qsv_decode(avctx, q, frame, got_frame, pkt);
+ 
+ reinit_fail:
+-    q->orig_pix_fmt = q->parser->format = avctx->pix_fmt = AV_PIX_FMT_NONE;
++    q->orig_pix_fmt = avctx->pix_fmt = AV_PIX_FMT_NONE;
+     return ret;
+ }
+ 
+diff --git a/libavcodec/qsvdec.h b/libavcodec/qsvdec.h
+index 4812fb2..c057bc6 100644
+--- a/libavcodec/qsvdec.h
++++ b/libavcodec/qsvdec.h
+@@ -56,9 +56,6 @@ typedef struct QSVContext {
+     int buffered_count;
+     int reinit_flag;
+ 
+-    // the internal parser and codec context for parsing the data
+-    AVCodecParserContext *parser;
+-    AVCodecContext *avctx_internal;
+     enum AVPixelFormat orig_pix_fmt;
+     uint32_t fourcc;
+     mfxFrameInfo frame_info;
+-- 
+1.8.3.1
+

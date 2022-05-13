@@ -1,0 +1,89 @@
+From e50a558c77843bd56b2798824880285862e41175 Mon Sep 17 00:00:00 2001
+From: Zhizhen Tang <zhizhen.tang@intel.com>
+Date: Fri, 6 May 2022 09:38:40 +0800
+Subject: [PATCH]  libavcodec/qsv: enabling d3d11va support, added  mfxhdlpair
+
+Adding DX11 relevant device type checks and adjusting callbacks with
+proper MediaSDK pair type support.
+
+Extending structure for proper MediaSDK pair type support.
+
+Signed-off-by: Artem Galin <artem.galin@intel.com>
+---
+ libavcodec/qsv.c          | 18 ++++++++++++++----
+ libavcodec/qsv_internal.h |  2 +-
+ 2 files changed, 15 insertions(+), 5 deletions(-)
+
+diff --git a/libavcodec/qsv.c b/libavcodec/qsv.c
+index 533804a..cbf217a 100644
+--- a/libavcodec/qsv.c
++++ b/libavcodec/qsv.c
+@@ -36,6 +36,8 @@
+ #include "avcodec.h"
+ #include "qsv_internal.h"
+ 
++#define MFX_IMPL_VIA_MASK(impl) (0x0f00 & (impl))
++
+ #if QSV_VERSION_ATLEAST(1, 12)
+ #include "mfx/mfxvp8.h"
+ #endif
+@@ -239,7 +241,9 @@ int ff_qsv_find_surface_idx(QSVFramesContext *ctx, QSVFrame *frame)
+     int i;
+     for (i = 0; i < ctx->nb_mids; i++) {
+         QSVMid *mid = &ctx->mids[i];
+-        if (mid->handle == frame->surface.Data.MemId)
++        mfxHDLPair *pair = (mfxHDLPair*)frame->surface.Data.MemId;
++        if ((mid->handle_pair->first == pair->first) &&
++            (mid->handle_pair->second == pair->second))
+             return i;
+     }
+     return AVERROR_BUG;
+@@ -423,7 +427,7 @@ static AVBufferRef *qsv_create_mids(AVBufferRef *hw_frames_ref)
+ 
+     for (i = 0; i < nb_surfaces; i++) {
+         QSVMid *mid = &mids[i];
+-        mid->handle        = frames_hwctx->surfaces[i].Data.MemId;
++        mid->handle_pair   = (mfxHDLPair*)frames_hwctx->surfaces[i].Data.MemId;
+         mid->hw_frames_ref = hw_frames_ref1;
+     }
+ 
+@@ -600,7 +604,7 @@ static mfxStatus qsv_frame_lock(mfxHDL pthis, mfxMemId mid, mfxFrameData *ptr)
+         goto fail;
+ 
+     qsv_mid->surf.Info = hw_frames_hwctx->surfaces[0].Info;
+-    qsv_mid->surf.Data.MemId = qsv_mid->handle;
++    qsv_mid->surf.Data.MemId = qsv_mid->handle_pair;
+ 
+     /* map the data to the system memory */
+     ret = av_hwframe_map(qsv_mid->locked_frame, qsv_mid->hw_frame,
+@@ -633,7 +637,13 @@ static mfxStatus qsv_frame_unlock(mfxHDL pthis, mfxMemId mid, mfxFrameData *ptr)
+ static mfxStatus qsv_frame_get_hdl(mfxHDL pthis, mfxMemId mid, mfxHDL *hdl)
+ {
+     QSVMid *qsv_mid = (QSVMid*)mid;
+-    *hdl = qsv_mid->handle;
++    mfxHDLPair *pair_dst = (mfxHDLPair*)hdl;
++    mfxHDLPair *pair_src = (mfxHDLPair*)qsv_mid->handle_pair;
++
++    pair_dst->first = pair_src->first;
++
++    if (pair_src->second != (mfxMemId)MFX_INFINITE)
++        pair_dst->second = pair_src->second;
+     return MFX_ERR_NONE;
+ }
+ 
+diff --git a/libavcodec/qsv_internal.h b/libavcodec/qsv_internal.h
+index c50e9c7..f2232ee 100644
+--- a/libavcodec/qsv_internal.h
++++ b/libavcodec/qsv_internal.h
+@@ -44,7 +44,7 @@
+ 
+ typedef struct QSVMid {
+     AVBufferRef *hw_frames_ref;
+-    mfxHDL handle;
++    mfxHDLPair *handle_pair;
+ 
+     AVFrame *locked_frame;
+     AVFrame *hw_frame;
+-- 
+1.8.3.1
+
